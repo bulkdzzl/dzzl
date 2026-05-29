@@ -124,7 +124,7 @@ class DriverRepository(private val driverDao: DriverDao) {
     }
 
     suspend fun updateProfile(profile: DriverProfile) {
-        driverDao.updateProfile(profile)
+        driverDao.insertProfile(profile)
     }
 
     suspend fun grabCargo(cargo: CargoListing): Long {
@@ -172,6 +172,15 @@ class DriverRepository(private val driverDao: DriverDao) {
         driverDao.updateWaybill(updated)
     }
 
+    suspend fun arriveDestination(waybillId: Int) {
+        val waybill = driverDao.getWaybillById(waybillId) ?: return
+        val updated = waybill.copy(
+            status = "UNLOADED",
+            statusText = "已抵达(卸货称重中)"
+        )
+        driverDao.updateWaybill(updated)
+    }
+
     suspend fun uploadUnloadingTicket(waybillId: Int, actualUnloadedWeight: Double, imageUri: String) {
         val waybill = driverDao.getWaybillById(waybillId) ?: return
         val freightVal = actualUnloadedWeight * waybill.pricePerTon
@@ -179,8 +188,8 @@ class DriverRepository(private val driverDao: DriverDao) {
             unloadWeight = actualUnloadedWeight,
             unloadWeightImage = imageUri,
             freightPayment = freightVal,
-            status = "UNLOADED",
-            statusText = "待确权结算(已完成卸载)"
+            status = "AUDITING",
+            statusText = "合规快速结算审核中"
         )
         driverDao.updateWaybill(updated)
 

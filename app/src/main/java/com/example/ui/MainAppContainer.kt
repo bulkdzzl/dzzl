@@ -60,9 +60,55 @@ private val TextSecondary = Color(0xFF64748B)   // Slate-500 - Muted text
 private val TextMuted = Color(0xFF94A3B8)       // Slate-400 - Very muted text
 private val BorderSlate = Color(0xFFF1F5F9)     // Slate-100 - Extra light border
 
+data class PermissionDialogInfo(
+    val title: String,
+    val description: String,
+    val permissions: List<String>,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val rationale: String,
+    val onGranted: () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppContainer(viewModel: DriverViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var permissionDialogState by remember { mutableStateOf<PermissionDialogInfo?>(null) }
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val currentInfo = permissionDialogState
+        if (currentInfo != null) {
+            val allGranted = results.values.all { it }
+            if (allGranted) {
+                android.widget.Toast.makeText(context, "✅ 已成功激活 “" + currentInfo.title + "” 安全授信保障", android.widget.Toast.LENGTH_SHORT).show()
+                currentInfo.onGranted()
+            } else {
+                android.widget.Toast.makeText(context, "⚠️ 权限被拒绝，请在系统设置中手动开启“" + currentInfo.title + "”所需权限", android.widget.Toast.LENGTH_LONG).show()
+            }
+            permissionDialogState = null
+        }
+    }
+
+    val checkAndRequestPermission = { title: String, desc: String, requiredPermissions: List<String>, icon: androidx.compose.ui.graphics.vector.ImageVector, rationale: String, onGranted: () -> Unit ->
+        val misses = requiredPermissions.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(context, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (misses.isEmpty()) {
+            onGranted()
+        } else {
+            permissionDialogState = PermissionDialogInfo(
+                title = title,
+                description = desc,
+                permissions = requiredPermissions,
+                icon = icon,
+                rationale = rationale,
+                onGranted = onGranted
+            )
+        }
+    }
+
     if (!viewModel.isLoggedIn) {
         LoginScreen(viewModel = viewModel)
         return
@@ -269,7 +315,11 @@ fun MainAppContainer(viewModel: DriverViewModel) {
         ) {
             // Screen transition animation
             AnimatedContent(
-                targetState = if (activeWaybillId != null && currentTab == 1) 99 else currentTab,
+                targetState = when {
+                    viewModel.selectedCargoId != null && currentTab == 0 -> 98
+                    activeWaybillId != null && currentTab == 1 -> 99
+                    else -> currentTab
+                },
                 transitionSpec = {
                     fadeIn() togetherWith fadeOut()
                 },
@@ -294,10 +344,25 @@ fun MainAppContainer(viewModel: DriverViewModel) {
                     4 -> when (viewModel.profileSubTab) {
                         1 -> PersonalProfileScreen(profile = profile, viewModel = viewModel)
                         2 -> VehicleProfileScreen(profile = profile, viewModel = viewModel)
+                        3 -> PermissionsManagementScreen(viewModel = viewModel)
                         else -> ProfileScreen(
                             profile = profile,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            checkAndRequestPermission = checkAndRequestPermission
                         )
+                    }
+                    98 -> {
+                        val currentCargoId = viewModel.selectedCargoId
+                        if (currentCargoId != null) {
+                            CargoDetailScreen(
+                                cargoId = currentCargoId,
+                                cargoList = cargoList,
+                                profile = profile,
+                                viewModel = viewModel
+                            )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize())
+                        }
                     }
                     99 -> {
                         val currentActiveId = activeWaybillId
@@ -305,7 +370,8 @@ fun MainAppContainer(viewModel: DriverViewModel) {
                             WaybillDetailScreen(
                                 waybillId = currentActiveId,
                                 waybills = waybillsList,
-                                viewModel = viewModel
+                                viewModel = viewModel,
+                                checkAndRequestPermission = checkAndRequestPermission
                             )
                         } else {
                             Box(modifier = Modifier.fillMaxSize())
@@ -362,6 +428,136 @@ fun MainAppContainer(viewModel: DriverViewModel) {
             // Scan QR order dialog
             if (viewModel.showScanDialog) {
                 ScanQRCodeDialog(viewModel)
+            }
+
+            // Dynamic Permission Dialog
+            permissionDialogState?.let { dialogInfo ->
+                Dialog(onDismissRequest = { permissionDialogState = null }) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(24.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Title header with badge
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandNavy.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = dialogInfo.icon,
+                                    contentDescription = null,
+                                    tint = BrandNavy,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Text(
+                                text = "服务权限与合规授信申请",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextSecondary,
+                                letterSpacing = 1.sp
+                            )
+                            
+                            Spacer(modifier = Modifier.height(6.dp))
+                            
+                            Text(
+                                text = dialogInfo.title,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandNavy,
+                                textAlign = TextAlign.Center
+                            )
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = CanvasBg),
+                                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(
+                                        text = "💡 卡友服务说明：",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = dialogInfo.description,
+                                        fontSize = 11.sp,
+                                        color = TextSecondary,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            HorizontalDivider(color = Color(0xFFF1F5F9))
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            Text(
+                                text = "⚠️ 公路法及多式联运监管须知：",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandAmber,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = dialogInfo.rationale,
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                lineHeight = 15.sp,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { permissionDialogState = null },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                                ) {
+                                    Text("暂不授权", color = TextSecondary)
+                                }
+                                
+                                Button(
+                                    onClick = {
+                                        permissionLauncher.launch(dialogInfo.permissions.toTypedArray())
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandNavy)
+                                ) {
+                                    Text("允许并授权", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -561,10 +757,10 @@ fun ActiveMissionCard(waybill: Waybill, onClickAction: () -> Unit) {
                     ) {
                         Text(
                             text = when (waybill.status) {
-                                "CREATED" -> "开始执行"
-                                "LOADED" -> "在途确权"
-                                "UNLOADED" -> "发起结算"
-                                "AUDITING" -> "审核中"
+                                "CREATED" -> "开始启运"
+                                "LOADED" -> "在途在轨"
+                                "UNLOADED" -> "卸货称重"
+                                "AUDITING" -> "审核结算"
                                 else -> "查看详情"
                             },
                             fontWeight = FontWeight.Bold,
@@ -756,7 +952,8 @@ fun CargoItemCard(cargo: CargoListing, profile: DriverProfile?, viewModel: Drive
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 5.dp),
+            .padding(horizontal = 14.dp, vertical = 5.dp)
+            .clickable { viewModel.selectedCargoId = cargo.id },
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSlate)
@@ -997,10 +1194,10 @@ fun WaybillCardItem(waybill: Waybill, viewModel: DriverViewModel) {
                 )
                 
                 val (badgeBg, badgeText, statusLabel) = when (waybill.status) {
-                    "CREATED" -> Triple(BrandAmberBg, BrandAmber, "去装货")
-                    "LOADED" -> Triple(BrandBlueBg, BrandNavy, "运输中")
-                    "UNLOADED" -> Triple(Color(0xFFF1F5F9), TextSecondary, "待首磅确权")
-                    "AUDITING" -> Triple(BrandAmberBg, BrandAmber, "审核对接中")
+                    "CREATED" -> Triple(BrandAmberBg, BrandAmber, "待启运")
+                    "LOADED" -> Triple(BrandBlueBg, BrandNavy, "在途运输")
+                    "UNLOADED" -> Triple(Color(0xFFEFF6FF), Color(0xFF1E40AF), "卸货称重")
+                    "AUDITING" -> Triple(BrandAmberBg, BrandAmber, "待审结算")
                     else -> Triple(BrandGreenBg, BrandGreenText, "结算完结")
                 }
                 
@@ -1107,11 +1304,15 @@ fun WaybillCardItem(waybill: Waybill, viewModel: DriverViewModel) {
 fun WaybillDetailScreen(
     waybillId: Int,
     waybills: List<Waybill>,
-    viewModel: DriverViewModel
+    viewModel: DriverViewModel,
+    checkAndRequestPermission: (String, String, List<String>, androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val waybill = waybills.find { it.id == waybillId } ?: return
     var loadedWeightInput by remember { mutableStateOf("38.64") }
     var unloadedWeightInput by remember { mutableStateOf("38.21") }
+    var loadingPhotoUri by remember { mutableStateOf<String?>(waybill.loadWeightImage) }
+    var unloadingPhotoUri by remember { mutableStateOf<String?>(waybill.unloadWeightImage) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1152,11 +1353,11 @@ fun WaybillDetailScreen(
                     
                     // Vertical visual progress line
                     val stepsList = listOf(
-                        Triple("CREATED", "承运成功·待到达装煤厂", "司机已接受运单合同，调度派发指标就位"),
-                        Triple("LOADED", "装货磅单确权中", "上传发煤厂首车电子磅单，重量确权进行中"),
-                        Triple("UNLOADED", "重度路段行驶中", "重卡在途跟迹定位中。安全行驶无红线违章记录"),
-                        Triple("AUDITING", "卸载称重·等待最后结算核发", "到达受货地点，双向卸载磅单差额比对合格"),
-                        Triple("PAID", "运费到账结资", "金税打款通过，款项随时可提现到银联卡")
+                        Triple("CREATED", "第①步 · 确认启运", "司机拍照采集车身照片，开始行车派单监控"),
+                        Triple("LOADED", "第②步 · 在途运输", "北斗动态轨迹联网，重卡绿色环保平稳行进中"),
+                        Triple("UNLOADED", "第③步 · 卸载称重", "到达受货工厂，录入卸载重量并采集收料磅单"),
+                        Triple("AUDITING", "第④步 · 结算审核", "双智双磅校核无误，发起快速国家合规结算"),
+                        Triple("PAID", "第⑤步 · 运发出账", "金税快速代发到账，资金支持提现本行借记卡")
                     )
 
                     stepsList.forEachIndexed { index, step ->
@@ -1165,8 +1366,9 @@ fun WaybillDetailScreen(
                         val currentStepIndex = when(waybill.status) {
                             "CREATED" -> 0
                             "LOADED" -> 1
-                            "UNLOADED" -> 3
-                            "AUDITING" -> 4
+                            "UNLOADED" -> 2
+                            "AUDITING" -> 3
+                            "PAID" -> 4
                             else -> 5
                         }
                         val isDone = index < currentStepIndex
@@ -1222,6 +1424,108 @@ fun WaybillDetailScreen(
             }
         }
 
+        // Waybill detailed specs card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, BorderSlate)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "运单详细信息 (官方存根)",
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            fontSize = 14.sp
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(BrandNavy.copy(alpha = 0.1f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "单号: DAZONG${waybill.id + 20261000}",
+                                fontSize = 10.sp,
+                                color = BrandNavy,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = BorderSlate, thickness = 1.dp, modifier = Modifier.padding(vertical = 10.dp))
+
+                    Text(
+                        text = "承运货种: " + waybill.cargoName,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "发货发布方: " + waybill.publisher, fontSize = 11.sp, color = TextSecondary)
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(16.dp).padding(top = 2.dp)
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(BrandGreen))
+                            Box(modifier = Modifier.size(width = 1.dp, height = 16.dp).background(Color.LightGray))
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(BrandAmber))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "装货地点: " + waybill.departure,
+                                fontSize = 12.sp,
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "卸货地点: " + waybill.destination,
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = BorderSlate, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("合同单吨运价", fontSize = 10.sp, color = TextSecondary)
+                            Text("¥" + String.format("%.2f", waybill.pricePerTon) + " /吨", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Column {
+                            Text("派单协议载重", fontSize = 10.sp, color = TextSecondary)
+                            Text(waybill.targetTons.toString() + " 吨", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("预计总运金 (税前)", fontSize = 10.sp, color = TextSecondary)
+                            Text("¥" + String.format("%.2f", waybill.targetTons * waybill.pricePerTon), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = BrandGreenText)
+                        }
+                    }
+                }
+            }
+        }
+
         // Interactive execution area
         item {
             Card(
@@ -1236,46 +1540,66 @@ fun WaybillDetailScreen(
 
                     when (waybill.status) {
                         "CREATED" -> {
-                            Text("您第一步需要：到达发煤厂进行称重装料，并将［装煤厂地磅单］进行数据采集。", color = TextPrimary, fontSize = 13.sp)
+                            Text("您第一步需要：进行车辆外观与车牌照影像采集，随后便可正式启动车辆，开始承运启运。", color = TextPrimary, fontSize = 13.sp)
                             Spacer(modifier = Modifier.height(14.dp))
-                            
-                            OutlinedTextField(
-                                value = loadedWeightInput,
-                                onValueChange = { loadedWeightInput = it },
-                                label = { Text("装货实称地磅重 (吨)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            // Fake Camera Upload representation
+
+                            // Custom Camera Upload representation for Start Journey
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(110.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(CanvasBg)
-                                    .clickable { /* Simulate capturing ticket picture */ },
+                                    .height(115.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (loadingPhotoUri != null) BrandGreenBg.copy(alpha = 0.15f) else CanvasBg)
+                                    .border(
+                                        BorderStroke(
+                                            1.dp,
+                                            if (loadingPhotoUri != null) BrandGreen else Color(0xFFE2E8F0)
+                                        ),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable {
+                                        checkAndRequestPermission(
+                                            "车辆安全外观及车牌相机授权",
+                                            "为了进行车辆装载外观及陕K·6A528车牌影像采集，大宗智联需要使用您的相机进行拍照和扫描识别。该影像将同步上报国家公路网以及煤矿智能化派单备案，保障行车安全合规性。",
+                                            listOf(android.Manifest.permission.CAMERA),
+                                            androidx.compose.material.icons.Icons.Filled.PhotoCamera,
+                                            "大宗商品智联运输，安全资质拍照上传是货源监管的法定合规流程。开启相机可自动为您识别并记录陕K·6A528车牌及厢斗完整度。"
+                                        ) {
+                                            loadingPhotoUri = "truck_photo_selected"
+                                            android.widget.Toast.makeText(context, "车辆装载外观及陕K·6A528车牌影像采集成功", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Filled.QrCodeScanner, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(32.dp))
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text("一键拍照OCR扫描煤矿地磅单", fontSize = 12.sp, color = TextSecondary)
-                                    Text("(系统自动解析核实，无需人工填写)", fontSize = 10.sp, color = TextSecondary.copy(alpha = 0.7f))
+                                if (loadingPhotoUri != null) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Filled.CheckCircle, contentDescription = "已采集", tint = BrandGreen, modifier = Modifier.size(32.dp))
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("车辆照片上传成功 (已存)", fontSize = 12.sp, color = BrandGreenText, fontWeight = FontWeight.Bold)
+                                        Text("系统联验识别匹配：陕K·6A528", fontSize = 10.sp, color = TextSecondary)
+                                    }
+                                } else {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Filled.PhotoCamera, contentDescription = "未采集", tint = TextSecondary, modifier = Modifier.size(32.dp))
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("一键拍照采集［卡车车头车身多维合影照］", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                        Text("(必须清晰拍到备案车牌号以进行系统校验)", fontSize = 10.sp, color = TextMuted)
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(14.dp))
                             Button(
                                 onClick = {
-                                    val weight = loadedWeightInput.toDoubleOrNull() ?: 38.0
-                                    viewModel.submitLoadingTicket(waybill.id, weight, "temp_uri_loading")
+                                    if (loadingPhotoUri == null) {
+                                        android.widget.Toast.makeText(context, "请先拍照上传车辆车头照！", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.submitLoadingTicket(waybill.id, waybill.targetTons, loadingPhotoUri!!)
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("确认首磅开始启运", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("启动发车，开始承运启运", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedButton(
@@ -1293,7 +1617,7 @@ fun WaybillDetailScreen(
                         }
 
                         "LOADED" -> {
-                            Text("您正在路途中。货车北斗轨迹已开启。请勿长期超高档大油门、疲劳驾驶。", color = TextPrimary, fontSize = 13.sp)
+                            Text("您正在路途中。货车北斗轨迹已开启，请各位卡友安全、平稳运输。", color = TextPrimary, fontSize = 13.sp)
                             Spacer(modifier = Modifier.height(12.dp))
                             
                             // Visual Road map details inside a small container box
@@ -1311,35 +1635,7 @@ fun WaybillDetailScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("司机：安全车速 78km/h | 水温 84°C | 轮压正常", fontSize = 11.sp, color = TextSecondary)
-                                    Text("装货磅重确权额度：${waybill.loadWeight} 吨", fontSize = 11.sp, color = TextSecondary)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(14.dp))
-                            
-                            OutlinedTextField(
-                                value = unloadedWeightInput,
-                                onValueChange = { unloadedWeightInput = it },
-                                label = { Text("输入到达卸货点收料单磅重 (吨)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(110.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(CanvasBg)
-                                    .clickable { /* Simulate capturing ticket picture */ },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(32.dp))
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text("上传收料卸货地磅单 / 签收单照片", fontSize = 12.sp, color = TextSecondary)
+                                    Text("在途协议载重：${waybill.targetTons} 吨", fontSize = 11.sp, color = TextSecondary)
                                 }
                             }
 
@@ -1347,67 +1643,150 @@ fun WaybillDetailScreen(
                             
                             Button(
                                 onClick = {
-                                    val weight = unloadedWeightInput.toDoubleOrNull() ?: 38.0
-                                    viewModel.submitUnloadingTicket(waybill.id, weight, "temp_uri_unloading")
+                                    viewModel.arriveDestination(waybill.id)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandAmber),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("到达卸货完毕，提交双向地磅证", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("已安全抵达目的地，开始卸载称重", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
 
                         "UNLOADED" -> {
-                            Text("已成功提交卸载。已产生代结算账款清单：", color = TextSecondary, fontSize = 13.sp)
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text("发煤厂重磅: ${waybill.loadWeight} 吨", fontSize = 12.sp, color = TextPrimary)
-                            Text("卸煤厂重磅: ${waybill.unloadWeight} 吨 (合理磅差: -0.42 吨)", fontSize = 12.sp, color = TextPrimary)
-                            Text("网络货运单价: ¥${waybill.pricePerTon}/吨", fontSize = 12.sp, color = TextPrimary)
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "核实应发运费：¥" + String.format("%.2f", waybill.freightPayment),
-                                fontWeight = FontWeight.Bold,
-                                color = BrandGreen,
-                                fontSize = 16.sp
-                            )
+                            Text("您目前已安全抵运。请在收货现场卸煤/卸货地磅房称重，并在此如实填报卸收吨数与上传地磅单照片。", color = TextPrimary, fontSize = 13.sp)
                             Spacer(modifier = Modifier.height(14.dp))
+                            
+                            OutlinedTextField(
+                                value = unloadedWeightInput,
+                                onValueChange = { unloadedWeightInput = it },
+                                label = { Text("输入到达卸货点收料单实测磅重 (吨)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = BrandNavy,
+                                    unfocusedBorderColor = BorderSlate,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = CanvasBg
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(115.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (unloadingPhotoUri != null) BrandGreenBg.copy(alpha = 0.15f) else CanvasBg)
+                                    .border(
+                                        BorderStroke(
+                                            1.dp,
+                                            if (unloadingPhotoUri != null) BrandGreen else Color(0xFFE2E8F0)
+                                        ),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable {
+                                        val mediaPermission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                            android.Manifest.permission.READ_MEDIA_IMAGES
+                                        } else {
+                                            android.Manifest.permission.READ_EXTERNAL_STORAGE
+                                        }
+                                        checkAndRequestPermission(
+                                            "收料地磅单相机与相册存储联用授权",
+                                            "为了采集并存档卸货收料点地磅单据及签发凭证印章，大宗智联需要使用您的相机和本地存储防伪接口。开启此项，系统智联互通能大大加快运费审批与放款发放时速。",
+                                            listOf(android.Manifest.permission.CAMERA, mediaPermission),
+                                            androidx.compose.material.icons.Icons.Filled.Image,
+                                            "国家货运结算规定，结算前必须上传装卸双方的地磅电子单据作为运输货量确权凭据。保障您的账户结算合规安全。"
+                                        ) {
+                                            unloadingPhotoUri = "unload_ticket_selected"
+                                            android.widget.Toast.makeText(context, "收货卸载地磅票OCR及安全数签采集成功", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (unloadingPhotoUri != null) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Filled.CheckCircle, contentDescription = "已采集", tint = BrandGreen, modifier = Modifier.size(32.dp))
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("收料地磅单照片上传成功 (已存)", fontSize = 12.sp, color = BrandGreenText, fontWeight = FontWeight.Bold)
+                                        Text("地磅房互联检验通过：与首重磅比相符已备案", fontSize = 10.sp, color = TextSecondary)
+                                    }
+                                } else {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Filled.PhotoCamera, contentDescription = "未采集", tint = TextSecondary, modifier = Modifier.size(32.dp))
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("扫拍/采集［收料卸货地磅单 / 签收单照片］", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                        Text("(系统智联验证比对双向地磅证，保障秒级结款)", fontSize = 10.sp, color = TextMuted)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
                             Button(
-                                onClick = { viewModel.requestAudit(waybill.id) },
+                                onClick = {
+                                    val weight = unloadedWeightInput.toDoubleOrNull() ?: waybill.targetTons
+                                    if (unloadingPhotoUri == null) {
+                                        android.widget.Toast.makeText(context, "请先拍卸货票据照或提供收料地磅单！", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.submitUnloadingTicket(waybill.id, weight, unloadingPhotoUri!!)
+                                    }
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("发起网络货运合规性快速结算审核", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("提交卸货称重磅单并进入审核", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
 
                         "AUDITING" -> {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                                 CircularProgressIndicator(color = BrandAmber, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Text("拼命对接金税合规端口，请稍等...", fontSize = 13.sp, color = TextSecondary)
-                                Spacer(modifier = Modifier.height(14.dp))
+                                Text("拼命对接金税合规、道路信息及三方地磅单双向确权中...", fontSize = 13.sp, color = TextSecondary)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("发运载重: ${waybill.loadWeight} 吨 | 收货实承: ${waybill.unloadWeight} 吨", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                Text("预计可得核算运费：¥" + String.format("%.2f", waybill.unloadWeight * waybill.pricePerTon), fontSize = 12.sp, color = BrandGreenText)
+                                Spacer(modifier = Modifier.height(16.dp))
                                 Button(
                                     onClick = { viewModel.approveWaybillDirectly(waybill.id) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandNavy)
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("一键测试审批(跳过等待)", color = Color.White)
+                                    Text("一键测试结算发资 (跳过审核等待)", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
 
                         else -> {
                             // Paid State
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("合同结款已到账提现钱包! ¥" + String.format("%.2f", waybill.freightPayment), fontWeight = FontWeight.Bold, color = BrandGreen)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("运费打款成功并到账“我的钱包”结算卡！", fontWeight = FontWeight.Bold, color = BrandGreen)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text("结算确权详单", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = BrandNavy)
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("收料实收吨数：${waybill.unloadWeight} 吨", fontSize = 12.sp, color = TextSecondary)
+                                        Text("合同协议单价：¥${waybill.pricePerTon}/吨", fontSize = 12.sp, color = TextSecondary)
+                                        Text("应结算本笔运金：¥" + String.format("%.2f", waybill.freightPayment), fontSize = 13.sp, color = BrandGreenText, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1722,8 +2101,10 @@ fun TransactionListItem(trans: WalletTransaction) {
 @Composable
 fun ProfileScreen(
     profile: DriverProfile?,
-    viewModel: DriverViewModel
+    viewModel: DriverViewModel,
+    checkAndRequestPermission: (String, String, List<String>, androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(14.dp)
@@ -1849,11 +2230,25 @@ fun ProfileScreen(
                         viewModel.profileSubTab = 2
                     }
                     Divider(color = CanvasBg, thickness = 1.dp)
+                    ProfileMenuRow("全天候国家北斗星联位置安全保障校验", Icons.Default.NotificationsActive) {
+                        checkAndRequestPermission(
+                            "北斗高精度位置安全保障授信",
+                            "为了实现运输途中网络车辆全天候智能定位保障、轨迹实时安全合规上传，我们需要获取您的精确定位与模糊定位权限。",
+                            listOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION),
+                            androidx.compose.material.icons.Icons.Filled.MyLocation,
+                            "依照交通公路法及网络大宗物流真实营运转单合规政策，重型货车运输中位置是在途核验与运力结算的硬性指标。开启该项系统将确保卡车全程不漏单不假跑。"
+                        ) {
+                            android.widget.Toast.makeText(context, "✅ 北斗高精度卫星实时轨迹安全保障中，设备完美绿灯在线", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    Divider(color = CanvasBg, thickness = 1.dp)
+                    ProfileMenuRow("智联系统调用及合规隐私授权管理", Icons.Default.Security) {
+                        viewModel.profileSubTab = 3
+                    }
+                    Divider(color = CanvasBg, thickness = 1.dp)
                     ProfileMenuRow("一键完美匹配实名资质比对", Icons.Default.VerifiedUser) {
                         viewModel.showCertifyDialog = true
                     }
-                    Divider(color = CanvasBg, thickness = 1.dp)
-                    ProfileMenuRow("全天候国家北斗星联位置安全保障", Icons.Default.NotificationsActive) {}
                     Divider(color = CanvasBg, thickness = 1.dp)
                     ProfileMenuRow("大宗智联官方24小时客服热线", Icons.Default.HeadsetMic) {}
                 }
@@ -2646,6 +3041,241 @@ fun DocumentUploadCardByTitle(
 }
 
 @Composable
+fun PermissionsManagementScreen(viewModel: DriverViewModel) {
+    val context = LocalContext.current
+    
+    // Check permission helper for UI drawing
+    val hasCamera = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val hasLocation = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    
+    val mediaPermission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+        android.Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    val hasStorage = androidx.core.content.ContextCompat.checkSelfPermission(context, mediaPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    // Launcher for dynamic permission request from within setting page
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val allGranted = results.values.all { it }
+        if (allGranted) {
+            android.widget.Toast.makeText(context, "✅ 合规服务授信极速接入成功！", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            android.widget.Toast.makeText(context, "⚠️ 权限未开启，请在系统设置中手动开启相关权限。", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CanvasBg)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.profileSubTab = 0 }
+            ) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = BrandNavy)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("返回我的设置主页", color = BrandNavy, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = BrandNavy),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Security, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("系统功能调用与安全授信管理", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "依据交通运输部及网信办关于《网络货运经营管理办法》等法规要求，在运单承运履行期间需收集相关的实时轨迹、地磅照片及车牌资质，用以确定运单真实性及秒级安全合规清算。大宗智联卡友端恪守司机隐私保密法案。",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.9f),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+        // Location Info
+        item {
+            PermissionItemCard(
+                title = "1. 位置定位权限 (北斗在途动态轨迹)",
+                description = "实现承运中运输卡车的实时运行轨迹、治超公路联网比对，是防假运、防止运单漏单的法定要素。",
+                statusText = if (hasLocation) "在线 · 北斗高精度位置追踪中" else "离线 · 轨迹监控关闭",
+                actionText = if (hasLocation) "运行状态完好" else "一键开启高精轨迹定位",
+                isGranted = hasLocation,
+                icon = Icons.Filled.MyLocation,
+                onClick = {
+                    if (!hasLocation) {
+                        permissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+                    } else {
+                        android.widget.Toast.makeText(context, "北斗高精度位置及道路联网在线运行中，状态良好", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
+        // Camera Info
+        item {
+            PermissionItemCard(
+                title = "2. 相机拍照权限 (地磅OCR/车身核验)",
+                description = "在起运阶段和卸货磅房阶段，用于司机离线采集装/卸重卡外观照片与扫描地磅单、签收单实据，实现极速OCR解析确认。",
+                statusText = if (hasCamera) "就绪 · 支持地磅与重卡实据扫拍" else "待授权相机硬件支持",
+                actionText = if (hasCamera) "相机已完美互联" else "一键开启相机拍照授权",
+                isGranted = hasCamera,
+                icon = Icons.Filled.PhotoCamera,
+                onClick = {
+                    if (!hasCamera) {
+                        permissionLauncher.launch(arrayOf(android.Manifest.permission.CAMERA))
+                    } else {
+                        android.widget.Toast.makeText(context, "相机服务完美在线，已接入大宗单据OCR图像处理管道", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
+        // Album/Storage Info
+        item {
+            PermissionItemCard(
+                title = "3. 相册与存储权限 (单据离线存根与对账)",
+                description = "用于在野外大山中、煤矿附近等无信号极弱网络下，暂时安全备份地磅证件原底文件，随后在信号恢复时自动云同步。",
+                statusText = if (hasStorage) "就绪 · 开启无网磅单极速存根" else "待授权本地存储对账",
+                actionText = if (hasStorage) "离线沙箱数据畅通" else "一键开启相册存储保障",
+                isGranted = hasStorage,
+                icon = Icons.Filled.Image,
+                onClick = {
+                    if (!hasStorage) {
+                        permissionLauncher.launch(arrayOf(mediaPermission))
+                    } else {
+                        android.widget.Toast.makeText(context, "本地存储及相册读取服务正常，对账信息可实现100%安全隔离区缓存", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = BrandGreenBg.copy(alpha = 0.1f)),
+                border = BorderStroke(1.dp, BrandGreen.copy(alpha = 0.2f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = BrandGreenText)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "国家《网络货运运输合规指数》司机端实测评估：AAA级 极速保障合规。",
+                        fontSize = 11.sp,
+                        color = BrandGreenText,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun PermissionItemCard(
+    title: String,
+    description: String,
+    statusText: String,
+    actionText: String,
+    isGranted: Boolean,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, if (isGranted) BrandGreen.copy(alpha = 0.3f) else BrandAmber.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (isGranted) BrandGreenBg else BrandAmberBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = icon, contentDescription = null, tint = if (isGranted) BrandGreenText else BrandAmber, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(text = title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                }
+                
+                // Active/Pending Badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isGranted) BrandGreenBg else BrandAmberBg)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (isGranted) "已安全对接" else "等待授权",
+                        color = if (isGranted) BrandGreenText else BrandAmber,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(text = description, fontSize = 11.sp, color = TextSecondary, lineHeight = 16.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            HorizontalDivider(color = Color(0xFFF1F5F9))
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(text = "系统与宿主校验状态：", fontSize = 10.sp, color = TextMuted)
+                    Text(text = statusText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (isGranted) BrandGreenText else BrandAmber)
+                }
+                
+                Button(
+                    onClick = onClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isGranted) BrandGreen else BrandNavy),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text(text = actionText, fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun PersonalProfileScreen(
     profile: DriverProfile?,
     viewModel: DriverViewModel
@@ -3296,5 +3926,427 @@ fun VehicleProfileScreen(
                 }
             }
         }
+    }
+}
+
+// ======================== SCREEN: CARGO DETAIL PAGE ========================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CargoDetailScreen(
+    cargoId: Int,
+    cargoList: List<CargoListing>,
+    profile: DriverProfile?,
+    viewModel: DriverViewModel
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cargo = cargoList.find { it.id == cargoId } ?: return
+    var showDialogAlert by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(CanvasBg),
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Back toolbar button
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                onClick = { viewModel.selectedCargoId = null },
+                border = BorderStroke(1.dp, BorderSlate)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = BrandNavy
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "返回货源大厅",
+                        color = BrandNavy,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+
+        // Main info header card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, BorderSlate)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(BrandGreenBg)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "即时抢单 · 指标有保障",
+                                color = BrandGreenText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = cargo.publishTime,
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = cargo.cargoName,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("协议单价", fontSize = 11.sp, color = TextSecondary)
+                            Text(
+                                text = "¥${cargo.pricePerTon}/吨",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = BrandAmber
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("剩余吨数 / 总吨数", fontSize = 11.sp, color = TextSecondary)
+                            Text(
+                                text = "${cargo.remainedTons} / ${cargo.totalTons} 吨",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandNavy
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Progress bar
+                    val progress = if (cargo.totalTons > 0.0) {
+                        (cargo.remainedTons / cargo.totalTons).toFloat().coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                        color = BrandNavy,
+                        trackColor = BorderSlate
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "该货源计划调派车次充足，已抢配 ${(progress * 100).toInt()}% 吨数额度",
+                        fontSize = 10.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+        }
+
+        // Transport route schedule details
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, BorderSlate)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Directions,
+                            contentDescription = null,
+                            tint = BrandNavy,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "承运起止干线路线",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(24.dp).padding(top = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.StopCircle,
+                                contentDescription = null,
+                                tint = BrandGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 2.dp, height = 44.dp)
+                                    .background(Color.LightGray)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = BrandAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        Column {
+                            Text(
+                                text = "【装货起运地】  " + cargo.departureCity,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = cargo.departure,
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
+                            )
+                            
+                            Text(
+                                text = "【卸货目的地】  " + cargo.destinationCity,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = cargo.destination,
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+
+                    Divider(color = BorderSlate, thickness = 1.dp, modifier = Modifier.padding(vertical = 14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("预估运输距离", fontSize = 11.sp, color = TextSecondary)
+                            Text(
+                                text = "${cargo.distance} 公里 (km)",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("预估行驶时间", fontSize = 11.sp, color = TextSecondary)
+                            val estimatedHours = String.format("%.1f", cargo.distance / 65.0)
+                            Text(
+                                text = "约 $estimatedHours 小时",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Shippers publisher details
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, BorderSlate)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "发货货主资质信誉",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandNavy.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Business,
+                                    contentDescription = null,
+                                    tint = BrandNavy,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = cargo.publisher,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "平台AAA级发资信誉 • 无运费纠纷账期良好",
+                                    fontSize = 10.sp,
+                                    color = BrandGreenText,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "正在安全接通货主热线: ${cargo.contactPhone} ...",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandNavy.copy(alpha = 0.08f), contentColor = BrandNavy),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("拨打电话", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Divider(color = BorderSlate, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text(
+                        text = "承运所需车型要求: ${cargo.vehicleReq}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "注：要求车况良好、尾气符合国六环保标准，配备密封蓬布以防泄漏粉尘。",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+        }
+
+        // Security regulatory tips
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = BrandAmberBg.copy(alpha = 0.15f)),
+                border = BorderStroke(1.dp, BrandAmber.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "⚠️ 道路货运安全与合规守法须知",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandAmber
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "根据《公路安全保护条例》及国家治超网联，本条线货运车辆（含车、挂、货）最大合法限重 49 吨。平台要求运输车次全程上线北斗高精度安全系统，违规超限超载将无法生成电子地磅进行确权以及结算付款，同时会记入司机及车辆信用名单。",
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+        }
+
+        // Action Buttons Grab order
+        item {
+            Button(
+                onClick = {
+                    if (profile?.idCardVerified == false || profile?.vehicleVerified == false) {
+                        showDialogAlert = true
+                    } else {
+                        viewModel.grabOrder(cargo) {
+                            viewModel.selectedCargoId = null
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Text(
+                    text = "立即申领抢配此单 (保障指标额度)",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 14.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+
+    if (showDialogAlert) {
+        AlertDialog(
+            onDismissRequest = { showDialogAlert = false },
+            title = { Text("平台提示：资质尚未核验", fontWeight = FontWeight.Bold) },
+            text = { Text("应交通主管部门道路网络货运相关安全条例：司机接单抢配货款前，必须完成实名、驾照及载重卡车行驶证核验比对。本过程完全免费。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDialogAlert = false
+                        viewModel.showCertifyDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandAmber)
+                ) {
+                    Text("立即一键认证", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialogAlert = false }) {
+                    Text("先看看", color = TextSecondary)
+                }
+            }
+        )
     }
 }

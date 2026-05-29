@@ -65,6 +65,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     // --- UI Navigation State ---
     var currentTab by mutableStateOf(0) // 0: Cargo, 1: Waybills, 2: AI Coach, 3: Wallet, 4: Me
     var activeWaybillId by mutableStateOf<Int?>(null) // If set, opens waybill execution details details
+    var selectedCargoId by mutableStateOf<Int?>(null) // If set, opens cargo details
     var isLoggedIn by mutableStateOf(false)
     var profileSubTab by mutableStateOf(0) // 0: Main Me list, 1: Personal Profile screen, 2: Vehicle Profile screen
 
@@ -111,6 +112,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     fun selectTab(tab: Int) {
         currentTab = tab
         activeWaybillId = null // clear detail screen on tab switch
+        selectedCargoId = null // clear cargo detail on tab switch
     }
 
     // --- Business Actions ---
@@ -175,13 +177,25 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun arriveDestination(waybillId: Int) {
+        viewModelScope.launch {
+            isProcessing = true
+            processMessage = "大宗智联终端系统：正在连接卸货场入场道闸及大宗地磅..."
+            delay(1200)
+            repository.arriveDestination(waybillId)
+            processMessage = "电子路牌核签通过，已进入第三步：卸货称重磅单采集！"
+            delay(1200)
+            isProcessing = false
+        }
+    }
+
     fun submitUnloadingTicket(waybillId: Int, actualWeight: Double, imageUri: String) {
         viewModelScope.launch {
             isProcessing = true
-            processMessage = "收货工厂物联网磅房：正在对接卸载称重数据..."
+            processMessage = "收货工程物联网磅房：正在对接卸载称重数据..."
             delay(1500)
             repository.uploadUnloadingTicket(waybillId, actualWeight, imageUri)
-            processMessage = "卸货磅单确认成功，实收重量 $actualWeight 吨。已计算运费：¥" + String.format("%.2f", actualWeight * 135) + "，正在发起自动结算审批。"
+            processMessage = "卸货磅单确认成功，实收重量 $actualWeight 吨。已完成第三步！正在直达第四步：金税多级快速安全结算审核中。"
             delay(1500)
             isProcessing = false
         }
