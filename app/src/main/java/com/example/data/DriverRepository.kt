@@ -281,4 +281,8 @@ class DriverRepository(private val driverDao: DriverDao) {
         )
         driverDao.updateProfile(updated)
     }
+
+    suspend fun insertTransaction(transaction: WalletTransaction) {
+        driverDao.insertTransaction(transaction)
+    }
 }

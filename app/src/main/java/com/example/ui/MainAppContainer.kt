@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.example.ui
 
 import androidx.compose.animation.*
@@ -44,10 +45,41 @@ import com.example.data.WalletTransaction
 import com.example.data.Waybill
 
 // Professional Polish Theme Colors
-private val BrandNavy = Color(0xFF2563EB)      // Professional Blue (Tailwind blue-600)
-private val BrandBlueLight = Color(0xFF3B82F6)  // Medium Blue (Tailwind blue-500)
-private val BrandBlueBg = Color(0xFFEFF6FF)     // Light Highlight Blue (Tailwind blue-50)
-private val BrandBlueBorder = Color(0xFFDBEAFE) // Tailwind blue-100
+object AppThemeState {
+    var selectedColorIndex by mutableStateOf(0)
+}
+
+private val BrandNavy: Color get() = when (AppThemeState.selectedColorIndex) {
+    1 -> Color(0xFFEF4444) // Red
+    2 -> Color(0xFF10B981) // Green
+    3 -> Color(0xFFF97316) // Orange
+    4 -> Color(0xFF6366F1) // Purple/Indigo
+    else -> Color(0xFF2563EB) // Professional Blue (Tailwind blue-600)
+}
+
+private val BrandBlueLight: Color get() = when (AppThemeState.selectedColorIndex) {
+    1 -> Color(0xFFF87171)
+    2 -> Color(0xFF34D399)
+    3 -> Color(0xFFFB923C)
+    4 -> Color(0xFF818CF8)
+    else -> Color(0xFF3B82F6) // Medium Blue (Tailwind blue-500)
+}
+
+private val BrandBlueBg: Color get() = when (AppThemeState.selectedColorIndex) {
+    1 -> Color(0xFFFEF2F2)
+    2 -> Color(0xFFECFDF5)
+    3 -> Color(0xFFFFF7ED)
+    4 -> Color(0xFFEEF2FF)
+    else -> Color(0xFFEFF6FF) // Light Highlight Blue (Tailwind blue-50)
+}
+
+private val BrandBlueBorder: Color get() = when (AppThemeState.selectedColorIndex) {
+    1 -> Color(0xFFFEE2E2)
+    2 -> Color(0xFFD1FAE5)
+    3 -> Color(0xFFFFEDD5)
+    4 -> Color(0xFFE0E7FF)
+    else -> Color(0xFFDBEAFE) // Tailwind blue-100
+}
 private val BrandAmber = Color(0xFFF97316)      // Warning / Alert / Active (Tailwind orange-500)
 private val BrandAmberBg = Color(0xFFFFEDD5)    // Tailwind orange-100
 private val BrandGreen = Color(0xFF22C55E)      // Done / Verification Green (Tailwind green-500)
@@ -74,6 +106,19 @@ data class PermissionDialogInfo(
 fun MainAppContainer(viewModel: DriverViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var permissionDialogState by remember { mutableStateOf<PermissionDialogInfo?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.initializeAppRef()
+    }
+
+    LaunchedEffect(viewModel.selectedThemeColor) {
+        AppThemeState.selectedColorIndex = viewModel.selectedThemeColor
+    }
+
+    if (viewModel.showSplashScreen) {
+        SplashScreenView(viewModel = viewModel)
+        return
+    }
 
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
@@ -120,6 +165,35 @@ fun MainAppContainer(viewModel: DriverViewModel) {
     val waybillsList by viewModel.waybills.collectAsStateWithLifecycle()
     val transactionList by viewModel.transactions.collectAsStateWithLifecycle()
     val activeWaybillId = viewModel.activeWaybillId
+
+    if (viewModel.showRefuelingScreen) {
+        RefuelingScreen(viewModel = viewModel)
+        return
+    }
+
+    if (viewModel.showBankCardsScreen) {
+        BankCardsScreen(viewModel = viewModel)
+        return
+    }
+
+    if (viewModel.showMessageCenterScreen) {
+        MessageCenterScreen(viewModel = viewModel)
+        return
+    }
+
+    if (viewModel.showReviewsScreen) {
+        ReviewsScreen(viewModel = viewModel)
+        return
+    }
+
+    if (viewModel.showSettingsScreen) {
+        SettingsScreen(viewModel = viewModel)
+        return
+    }
+
+    if (viewModel.showUpdateDialog) {
+        VersionUpdateDialog(viewModel = viewModel)
+    }
 
     Scaffold(
         topBar = {
@@ -217,7 +291,7 @@ fun MainAppContainer(viewModel: DriverViewModel) {
                         )
                     } else {
                         IconButton(
-                            onClick = { /* Simple notify view */ },
+                            onClick = { viewModel.showMessageCenterScreen = true },
                             modifier = Modifier.padding(end = 4.dp)
                         ) {
                             Icon(
@@ -833,6 +907,99 @@ fun CargoListingScreen(
                             color = if (profile?.vehicleVerified == true) BrandGreenText else BrandAmber,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "证件到期提醒",
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "证件到期提醒与合规督办提示",
+                            color = Color(0xFF991B1B),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "驾驶证 · A2（暂设到期）",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF374151)
+                                )
+                                Text(
+                                    text = "到期日期: 2026-12-15 (还有 30 天期)",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFDC2626),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                text = "立即更新 →",
+                                fontSize = 11.sp,
+                                color = BrandNavy,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable {
+                                    viewModel.currentTab = 4
+                                    viewModel.profileSubTab = 1
+                                }
+                            )
+                        }
+                        Divider(color = Color(0xFFFEE2E2), thickness = 1.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "重型货车道路运输执照",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF374151)
+                                )
+                                Text(
+                                    text = "到期日期: 2026-08-20 (还有 83 天期)",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFD97706),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                text = "立即更新 →",
+                                fontSize = 11.sp,
+                                color = BrandNavy,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable {
+                                    viewModel.currentTab = 4
+                                    viewModel.profileSubTab = 2
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -1663,6 +1830,8 @@ fun WaybillDetailScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
                                     focusedBorderColor = BrandNavy,
                                     unfocusedBorderColor = BorderSlate,
                                     focusedContainerColor = Color.White,
@@ -1948,6 +2117,8 @@ fun AiCoachScreen(viewModel: DriverViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 maxLines = 2,
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
                     focusedBorderColor = BrandNavy,
                     unfocusedBorderColor = Color.LightGray
                 )
@@ -2250,7 +2421,27 @@ fun ProfileScreen(
                         viewModel.showCertifyDialog = true
                     }
                     Divider(color = CanvasBg, thickness = 1.dp)
-                    ProfileMenuRow("大宗智联官方24小时客服热线", Icons.Default.HeadsetMic) {}
+                    ProfileMenuRow("智联大宗智慧加油门禁管理系统", Icons.Default.LocalGasStation) {
+                        viewModel.showRefuelingScreen = true
+                        viewModel.refuelingScreenTab = 0
+                    }
+                    Divider(color = CanvasBg, thickness = 1.dp)
+                    ProfileMenuRow("多级网商及农信社储蓄收款卡管理", Icons.Default.CreditCard) {
+                        viewModel.showBankCardsScreen = true
+                    }
+                    Divider(color = CanvasBg, thickness = 1.dp)
+                    ProfileMenuRow("我的评价与调度承运满意度考核", Icons.Default.Star) {
+                        viewModel.showReviewsScreen = true
+                    }
+                    Divider(color = CanvasBg, thickness = 1.dp)
+                    ProfileMenuRow("司机端系统个性化与合规设置中心", Icons.Default.Settings) {
+                        viewModel.showSettingsScreen = true
+                        viewModel.settingsScreenSubTab = 0
+                    }
+                    Divider(color = CanvasBg, thickness = 1.dp)
+                    ProfileMenuRow("大宗智联官方24小时客服热线", Icons.Default.HeadsetMic) {
+                        android.widget.Toast.makeText(context, "正在呼叫官方24小时客服热线：400-888-9999", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -2337,6 +2528,8 @@ fun WithdrawMoneyDialog(viewModel: DriverViewModel, profile: DriverProfile?) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
                         focusedBorderColor = BrandNavy,
                         unfocusedBorderColor = Color.LightGray
                     )
@@ -2348,7 +2541,13 @@ fun WithdrawMoneyDialog(viewModel: DriverViewModel, profile: DriverProfile?) {
                     value = viewModel.withdrawBank,
                     onValueChange = { viewModel.withdrawBank = it },
                     label = { Text("银行名称") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = BrandNavy,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2358,7 +2557,13 @@ fun WithdrawMoneyDialog(viewModel: DriverViewModel, profile: DriverProfile?) {
                     onValueChange = { viewModel.withdrawCard = it },
                     label = { Text("储蓄银联卡号") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = BrandNavy,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2417,7 +2622,13 @@ fun CertifyCredentialsDialog(viewModel: DriverViewModel, profile: DriverProfile?
                     onValueChange = { viewModel.certName = it },
                     label = { Text("真实姓名") },
                     placeholder = { Text("如：张晓峰") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = BrandNavy,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2427,7 +2638,13 @@ fun CertifyCredentialsDialog(viewModel: DriverViewModel, profile: DriverProfile?
                     onValueChange = { viewModel.certIdCard = it },
                     label = { Text("身份证号码") },
                     placeholder = { Text("例如：610124...") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = BrandNavy,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2437,7 +2654,13 @@ fun CertifyCredentialsDialog(viewModel: DriverViewModel, profile: DriverProfile?
                     onValueChange = { viewModel.certPlate = it },
                     label = { Text("重卡特种车牌号码") },
                     placeholder = { Text("如：陕K·8W912") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = BrandNavy,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2447,7 +2670,13 @@ fun CertifyCredentialsDialog(viewModel: DriverViewModel, profile: DriverProfile?
                     onValueChange = { viewModel.certVehicleSize = it },
                     label = { Text("厢体及车型规格") },
                     placeholder = { Text("如：13.7米侧翻半挂车") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = BrandNavy,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -2825,9 +3054,11 @@ fun LoginScreen(viewModel: DriverViewModel) {
                                 contentDescription = "手机",
                                 tint = TextMuted,
                                 modifier = Modifier.size(18.dp)
-                            )
+                             )
                         },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
                             focusedBorderColor = BrandNavy,
                             unfocusedBorderColor = BorderSlate,
                             focusedContainerColor = Color.White,
@@ -2867,6 +3098,8 @@ fun LoginScreen(viewModel: DriverViewModel) {
                                 )
                             },
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -2974,7 +3207,7 @@ fun LoginScreen(viewModel: DriverViewModel) {
                             )
                         } else {
                             Text(
-                                text = "身份校验并安全开锁登录",
+                                text = "一键登录",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
@@ -3382,6 +3615,8 @@ fun PersonalProfileScreen(
                             onValueChange = { nameInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3406,6 +3641,8 @@ fun PersonalProfileScreen(
                             onValueChange = { if (it.length <= 11) phoneInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3430,6 +3667,8 @@ fun PersonalProfileScreen(
                             onValueChange = { idCardInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3454,6 +3693,8 @@ fun PersonalProfileScreen(
                             onValueChange = { licenseInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3703,6 +3944,8 @@ fun VehicleProfileScreen(
                             onValueChange = { plateInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3727,6 +3970,8 @@ fun VehicleProfileScreen(
                             onValueChange = { trailerPlateInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3751,6 +3996,8 @@ fun VehicleProfileScreen(
                             onValueChange = { permitInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3775,6 +4022,8 @@ fun VehicleProfileScreen(
                             onValueChange = { sizeInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -3799,6 +4048,8 @@ fun VehicleProfileScreen(
                             onValueChange = { capacityInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
                                 focusedBorderColor = BrandNavy,
                                 unfocusedBorderColor = BorderSlate,
                                 focusedContainerColor = Color.White,
@@ -4348,5 +4599,1232 @@ fun CargoDetailScreen(
                 }
             }
         )
+    }
+}
+
+// ==========================================
+// NEW FEATURE USER COMPOSABLES FOR V2.0.0
+// ==========================================
+
+@Composable
+fun SplashScreenView(viewModel: DriverViewModel) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F172A)), // Deep slate loading bg
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF2563EB)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocalShipping,
+                    contentDescription = "App Logo",
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "大宗智联 • 司机端",
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "陕煤陕钢网络货运承运平台",
+                fontSize = 12.sp,
+                color = Color(0xFF94A3B8)
+            )
+            Spacer(modifier = Modifier.height(60.dp))
+            CircularProgressIndicator(
+                color = Color(0xFF2563EB),
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "正在核对网络货运高精度安全轨信...",
+                fontSize = 11.sp,
+                color = Color(0xFF64748B)
+            )
+        }
+    }
+}
+
+@Composable
+fun VersionUpdateDialog(viewModel: DriverViewModel) {
+    AlertDialog(
+        onDismissRequest = { viewModel.showUpdateDialog = false },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "更新",
+                    tint = BrandNavy,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("发现官方全新版本 V2.0.0", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "【大宗智联-司机端 V2.0.0 重磅来袭】",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = TextPrimary
+                )
+                Text(
+                    text = "1. ✨ 新载加油系统：新增「智慧加油模块」，卡车油卡与余额度一键互转！\n" +
+                           "2. 💳 银行卡精细管理：支持添加多级收款卡，设定默认极速结算储蓄卡。\n" +
+                           "3. 🌟 资信评价公示：承运满意度得分公开，高资信卡友优先分配高价陕煤单。\n" +
+                           "4. 💬 消息中心归纳：划分系统公告与卸煤称重结算快讯，掌握一手行盘通告。\n" +
+                           "5. 🎨 个性化定制设置：提供红、橙、绿、蓝、靛多重工业承运皮肤色彩极速换装！",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    lineHeight = 16.sp
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    viewModel.showUpdateDialog = false
+                    android.widget.Toast.makeText(viewModel.getApplication(), "✅ 正在联运后台极速安装增量包性能升级中，承运不影响接单！", android.widget.Toast.LENGTH_LONG).show()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy)
+            ) {
+                Text("立即极速更新（增量）", color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { viewModel.showUpdateDialog = false }) {
+                Text("稍后再说", color = TextSecondary)
+            }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
+fun RefuelingScreen(viewModel: DriverViewModel) {
+    var searchStationQuery by remember { mutableStateOf("") }
+    val selectedStationIdVal = viewModel.selectedStationIdForRefuel
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("智能大宗智慧加油系统", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                navigationIcon = {
+                    IconButton(onClick = { viewModel.showRefuelingScreen = false }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                modifier = Modifier.drawBehind {
+                    drawLine(color = BorderSlate, start = Offset(0f, size.height), end = Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                }
+            )
+        },
+        bottomBar = {
+            NavigationBar(containerColor = Color.White) {
+                NavigationBarItem(
+                    selected = viewModel.refuelingScreenTab == 0,
+                    onClick = { viewModel.refuelingScreenTab = 0 },
+                    icon = { Icon(imageVector = Icons.Default.Map, contentDescription = "附近油站") },
+                    label = { Text("附近加油", fontSize = 11.sp) }
+                )
+                NavigationBarItem(
+                    selected = viewModel.refuelingScreenTab == 1,
+                    onClick = { viewModel.refuelingScreenTab = 1 },
+                    icon = { Icon(imageVector = Icons.Default.Receipt, contentDescription = "加油订单") },
+                    label = { Text("订单历史", fontSize = 11.sp) }
+                )
+                NavigationBarItem(
+                    selected = viewModel.refuelingScreenTab == 2,
+                    onClick = { viewModel.refuelingScreenTab = 2 },
+                    icon = { Icon(imageVector = Icons.Default.CreditCard, contentDescription = "油卡储值") },
+                    label = { Text("我的油卡", fontSize = 11.sp) }
+                )
+            }
+        },
+        containerColor = CanvasBg
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            when (viewModel.refuelingScreenTab) {
+                0 -> { // Station list
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            OutlinedTextField(
+                                value = searchStationQuery,
+                                onValueChange = { searchStationQuery = it },
+                                placeholder = { Text("输入加油站/加气站名称查找...", fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedBorderColor = BrandNavy,
+                                    unfocusedBorderColor = BorderSlate,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White
+                                )
+                            )
+                        }
+
+                        val filteredStations = viewModel.refuelingStations.filter {
+                            searchStationQuery.isEmpty() || it.name.contains(searchStationQuery, ignoreCase = true)
+                        }
+
+                        items(filteredStations) { station ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, BorderSlate),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (station.isGas) Color(0xFF10B981).copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (station.isGas) Icons.Default.PinDrop else Icons.Default.LocalGasStation,
+                                                    contentDescription = null,
+                                                    tint = if (station.isGas) Color(0xFF10B981) else Color(0xFFEF4444),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(station.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                                                Text(station.address, fontSize = 11.sp, color = TextSecondary)
+                                            }
+                                        }
+                                        Text(station.distance, fontSize = 11.sp, color = BrandNavy, fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Divider(color = BorderSlate, thickness = 1.dp)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    
+                                    if (station.isGas) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                            Column {
+                                                Text("LNG 天然气智慧价", fontSize = 10.sp, color = TextSecondary)
+                                                Row(verticalAlignment = Alignment.Bottom) {
+                                                    Text("¥ ${station.gasPrice92}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = BrandGreenText)
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("挂牌价: ¥${station.marketPrice92}", fontSize = 10.sp, color = TextMuted, style = androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
+                                                }
+                                            }
+                                            Button(
+                                                onClick = { viewModel.selectStationForRefuel(station.id) },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.height(30.dp),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                            ) {
+                                                Text("立即加气", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    } else {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                                    Column {
+                                                        Text("0# 柴油", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                                                        Text("¥${station.dieselPrice0} (省¥${String.format("%.2f", station.marketPrice0 - station.dieselPrice0)})", fontSize = 12.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Column {
+                                                        Text("#92 汽油", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                                                        Text("¥${station.gasPrice92} (省¥${String.format("%.2f", station.marketPrice92 - station.gasPrice92)})", fontSize = 11.sp, color = TextPrimary)
+                                                    }
+                                                    Column {
+                                                        Text("#95 汽油", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                                                        Text("¥${station.gasPrice95} (省¥${String.format("%.2f", station.marketPrice95 - station.gasPrice95)})", fontSize = 11.sp, color = TextPrimary)
+                                                    }
+                                                }
+                                                Button(
+                                                    onClick = { viewModel.selectStationForRefuel(station.id) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.height(30.dp),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text("立即加油", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                1 -> { // Refueling orders list
+                    if (viewModel.refuelingOrders.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("暂无加油/气智慧订单记录", color = TextSecondary, fontSize = 13.sp)
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                            items(viewModel.refuelingOrders) { order ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, BorderSlate),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Column {
+                                                Text(order.stationName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
+                                                Text("油单号: ${order.id}", fontSize = 10.sp, color = TextMuted)
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(BrandGreenBg)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(order.status, fontSize = 9.sp, color = BrandGreenText, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Divider(color = BorderSlate, thickness = 0.5.dp)
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Column {
+                                                Text("车牌: ${order.vehiclePlate} | 枪号: ${order.gunNo}", fontSize = 11.sp, color = TextSecondary)
+                                                Text("油品规格 / 单价: ${order.fuelType} | ¥${order.pricePerLitre}/L", fontSize = 11.sp, color = TextSecondary)
+                                                Text("加油加气数量: ${String.format("%.2f", order.litres)} 升(公升/公斤)", fontSize = 11.sp, color = TextSecondary)
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("油卡核销扣款", fontSize = 9.sp, color = TextSecondary)
+                                                Text("¥ ${order.amount}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
+                                                Text(order.date, fontSize = 9.sp, color = TextMuted)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                2 -> { // Oil card wallet
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                                    .padding(bottom = 16.dp),
+                                colors = CardDefaults.cardColors(containerColor = BrandNavy),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(18.dp)) {
+                                    Column {
+                                        Text("大宗智联•智慧油卡 (联名互通卡)", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("陕煤 & 延长石油联名专用核销介质", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Text("智慧油卡可用金余金 (元)", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                                        Text("¥ ${String.format("%.2f", viewModel.oilCardBalance)}", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.LocalGasStation,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.15f),
+                                        modifier = Modifier.size(80.dp).align(Alignment.BottomEnd).offset(x = 10.dp, y = 10.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        item {
+                            Text("运费一键转换充值油卡", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 8.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, BorderSlate),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text("司机提现主钱包可用余额: ¥ ${String.format("%.2f", viewModel.profile.value?.balance ?: 0.0)}", fontSize = 12.sp, color = TextSecondary)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf(100.0, 500.0, 1000.0).forEach { amt ->
+                                            OutlinedButton(
+                                                onClick = { viewModel.chargeOilCard(amt) },
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandNavy),
+                                                shape = RoundedCornerShape(8.dp),
+                                                border = BorderStroke(1.dp, BrandBlueBorder),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("转充¥${amt.toInt()}", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text("💡 温馨建议：使用卡车主钱包多级资金转换，省去提现审核，直接对接中石化、中石油、延长石油在途核销，加油加气立享双重折扣保障！", fontSize = 10.sp, color = TextSecondary, lineHeight = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (selectedStationIdVal != null) {
+        val station = viewModel.refuelingStations.find { it.id == selectedStationIdVal }
+        if (station != null) {
+            Dialog(onDismissRequest = { viewModel.selectedStationIdForRefuel = null }) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("一键极速扫码智慧加油", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                            IconButton(onClick = { viewModel.selectedStationIdForRefuel = null }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "关闭", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(station.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = BrandNavy)
+                        Text(station.address, fontSize = 11.sp, color = TextSecondary)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        
+                        Text("1. 选择加油枪油品", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (station.isGas) {
+                                FilterChip(
+                                    selected = viewModel.refuelSelectedFuel == "LNG",
+                                    onClick = { viewModel.refuelSelectedFuel = "LNG" },
+                                    label = { Text("LNG 天然气", fontSize = 11.sp) }
+                                )
+                            } else {
+                                listOf("0#", "92#", "95#").forEach { f ->
+                                    FilterChip(
+                                        selected = viewModel.refuelSelectedFuel == f,
+                                        onClick = { viewModel.refuelSelectedFuel = f },
+                                        label = { Text("$f 号", fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+
+                        Text("2. 选择油枪物理编号", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary, modifier = Modifier.padding(top = 10.dp))
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("1号", "2号", "3号").forEach { g ->
+                                FilterChip(
+                                    selected = viewModel.refuelSelectedGun == g,
+                                    onClick = { viewModel.refuelSelectedGun = g },
+                                    label = { Text(g, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        Text("3. 选择/输入加油核销金额 (元)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary, modifier = Modifier.padding(top = 10.dp))
+                        OutlinedTextField(
+                            value = viewModel.refuelAmount,
+                            onValueChange = { viewModel.refuelAmount = it },
+                            placeholder = { Text("输入加油金额...", fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = BrandNavy,
+                                unfocusedBorderColor = BorderSlate,
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White
+                            )
+                        )
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("200", "500", "1000", "2000").forEach { amt ->
+                                OutlinedButton(
+                                    onClick = { viewModel.refuelAmount = amt },
+                                    modifier = Modifier.weight(1f).height(30.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("¥$amt", fontSize = 10.sp)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        val priceText = when (viewModel.refuelSelectedFuel) {
+                            "92#" -> station.gasPrice92
+                            "95#" -> station.gasPrice95
+                            "0#" -> station.dieselPrice0
+                            else -> station.gasPrice92 // LNG
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text("可用智慧油卡余额: ¥ ${String.format("%.2f", viewModel.oilCardBalance)}", fontSize = 10.sp, color = TextSecondary)
+                                Text("当前精算单价: ¥ ${priceText}/L", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.executeRefuel {
+                                        android.widget.Toast.makeText(context, "✅ 口卡钱包扣款加油成功！请注意行车安全。", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("确认油卡限时支付", fontSize = 11.sp, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BankCardsScreen(viewModel: DriverViewModel) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var holderName by remember { mutableStateOf(viewModel.profile.value?.name ?: "王建国") }
+    var cardNumber by remember { mutableStateOf("") }
+    var bankName by remember { mutableStateOf("陕西省信用联社(农信社)") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("收款人储蓄银行卡管理", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                navigationIcon = {
+                    IconButton(onClick = { viewModel.showBankCardsScreen = false }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { showAddDialog = true }) {
+                        Text("添加银行卡", color = BrandNavy, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                modifier = Modifier.drawBehind {
+                    drawLine(color = BorderSlate, start = Offset(0f, size.height), end = Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                }
+            )
+        },
+        containerColor = CanvasBg
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            if (viewModel.bankCards.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无已绑定的结运提现卡，请添加", color = TextSecondary, fontSize = 13.sp)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                    item {
+                        Text("极速结算储蓄银联卡列表", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
+                    }
+                    items(viewModel.bankCards) { card ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, if (card.isDefault) BrandBlueBorder else BorderSlate),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier.size(32.dp).clip(CircleShape).background(BrandNavy.copy(alpha = 0.1f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.AccountBalance, contentDescription = null, tint = BrandNavy, modifier = Modifier.size(16.dp))
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(card.bankName, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                                            Text(card.cardType, fontSize = 10.sp, color = TextSecondary)
+                                        }
+                                    }
+                                    if (card.isDefault) {
+                                        Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(BrandBlueBg).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                            Text("默认收款卡", fontSize = 9.sp, color = BrandNavy, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text(card.cardNumber, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("收款开户名: ${card.holderName}", fontSize = 11.sp, color = TextSecondary)
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.removeBankCard(card.id)
+                                            android.widget.Toast.makeText(context, "✅ 银行储蓄收款卡解绑成功", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("解绑销户", fontSize = 10.sp, color = Color(0xFFEF4444))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        Dialog(onDismissRequest = { showAddDialog = false }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("添加收款人储蓄银联卡", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                        IconButton(onClick = { showAddDialog = false }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "关闭", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    Text("开户所属银行", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    OutlinedTextField(
+                        value = bankName,
+                        onValueChange = { bankName = it },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = BrandNavy,
+                            unfocusedBorderColor = BorderSlate,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
+                    )
+
+                    Text("持卡人真实姓名", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.padding(top = 8.dp))
+                    OutlinedTextField(
+                        value = holderName,
+                        onValueChange = { holderName = it },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = BrandNavy,
+                            unfocusedBorderColor = BorderSlate,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
+                    )
+
+                    Text("银联储蓄卡16-19位卡号", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.padding(top = 8.dp))
+                    OutlinedTextField(
+                        value = cardNumber,
+                        onValueChange = { cardNumber = it },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        placeholder = { Text("6217...", fontSize = 11.sp) },
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = BrandNavy,
+                            unfocusedBorderColor = BorderSlate,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            if (cardNumber.isBlank() || bankName.isBlank()) {
+                                android.widget.Toast.makeText(context, "请填入完整的开户所属银行及储蓄卡卡号！", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewModel.addBankCard(holderName, cardNumber, bankName)
+                                showAddDialog = false
+                                android.widget.Toast.makeText(context, "✅ 收款银行卡绑定核验通过！", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Text("绑定卡片安全提交", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MessageCenterScreen(viewModel: DriverViewModel) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("智联消息及理货公告中心", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                navigationIcon = {
+                    IconButton(onClick = { viewModel.showMessageCenterScreen = false }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                modifier = Modifier.drawBehind {
+                    drawLine(color = BorderSlate, start = Offset(0f, size.height), end = Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                }
+            )
+        },
+        containerColor = CanvasBg
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            if (viewModel.notifications.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无消息通告通告", color = TextSecondary, fontSize = 13.sp)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                    item {
+                        Text("最新发布的联通快盘指示", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
+                    }
+                    items(viewModel.notifications) { item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, BorderSlate),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(if (item.category == "系统通知") BrandAmberBg else BrandBlueBg)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(item.category, fontSize = 9.sp, color = if (item.category == "系统通知") BrandAmber else BrandNavy, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(item.title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                                    }
+                                    Text(item.date.substringBefore(" "), fontSize = 10.sp, color = TextMuted)
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(item.content, fontSize = 11.sp, color = TextSecondary, lineHeight = 15.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+@Composable
+fun ReviewsScreen(viewModel: DriverViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("司机信誉评价及调度资信库", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                navigationIcon = {
+                    IconButton(onClick = { viewModel.showReviewsScreen = false }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { viewModel.showReviewsDialog = true }) {
+                        Text("模拟评分", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = BrandNavy)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                modifier = Modifier.drawBehind {
+                    drawLine(color = BorderSlate, start = Offset(0f, size.height), end = Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                }
+            )
+        },
+        containerColor = CanvasBg
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                // Header rating summary stats
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, BorderSlate)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("司机综合历史资信评分", fontSize = 12.sp, color = TextSecondary)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("${viewModel.reviewsRating}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Row {
+                                                repeat(5) { star ->
+                                                    val isGold = star < viewModel.reviewsRating.toInt()
+                                                    Icon(
+                                                        imageVector = Icons.Default.Star,
+                                                        contentDescription = null,
+                                                        tint = if (isGold) Color(0xFFFFD700) else Color(0xFFE2E8F0),
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text("共计 ${viewModel.reviewsCount} 条调度/货主考评分单", fontSize = 9.sp, color = TextMuted)
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(CircleShape)
+                                        .background(BrandGreenBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("极优", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = BrandGreenText)
+                                        Text("AAA级", fontSize = 9.sp, color = BrandGreenText)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text("资信等级评定：本考核体系对接行业征信及中国交通物流数据。高分司机专享陕煤集团在途保价保障，免交额外承运保险，货主直付率提升30%！", fontSize = 10.sp, color = TextSecondary, lineHeight = 14.sp)
+                        }
+                    }
+                }
+
+                item {
+                    Text("最近来自调度厂矿评价历史", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 10.dp))
+                }
+
+                items(viewModel.driverReviews) { r ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, BorderSlate),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier.size(24.dp).clip(CircleShape).background(BrandNavy.copy(alpha = 0.1f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Person, contentDescription = null, tint = BrandNavy, modifier = Modifier.size(12.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(r.reviewerName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
+                                }
+                                Row {
+                                    repeat(r.rating) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(12.dp))
+                                    }
+                                    repeat(5 - r.rating) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFE2E8F0), modifier = Modifier.size(12.dp))
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                r.tags.forEach { tag ->
+                                    Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(CanvasBg).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                        Text(tag, fontSize = 10.sp, color = TextSecondary)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Text(r.date, fontSize = 9.sp, color = TextMuted)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (viewModel.showReviewsDialog) {
+        Dialog(onDismissRequest = { viewModel.showReviewsDialog = false }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text("模拟厂矿调度评分考核", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("模拟本次陕煤在途承运已顺利送达，请输入收货端大康电厂磅房给本车打的分数值：", fontSize = 12.sp, color = TextSecondary)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        listOf(3, 4, 5).forEach { stars ->
+                            FilterChip(
+                                selected = viewModel.reviewDialogRating == stars,
+                                onClick = { viewModel.reviewDialogRating = stars },
+                                label = { Text("$stars 星 (极推)", fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("选择综合印象标签", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("安全送达", "配合装煤", "车辆极度整洁").forEach { tag ->
+                            FilterChip(
+                                selected = viewModel.reviewDialogTag == tag,
+                                onClick = { viewModel.reviewDialogTag = tag },
+                                label = { Text(tag, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            viewModel.addSampleReview(viewModel.reviewDialogRating, viewModel.reviewDialogTag)
+                            viewModel.showReviewsDialog = false
+                            android.widget.Toast.makeText(context, "✅ 口碑资信评分模拟注入成功！", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("立即注入信誉口碑值", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(viewModel: DriverViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = when (viewModel.settingsScreenSubTab) {
+                            1 -> "动态承运主题换装"
+                            2 -> "在途多国语言转换"
+                            3 -> "关于我们及官方资质"
+                            4 -> "智联研发及反馈建言"
+                            5 -> "智联一键核销提现密码"
+                            else -> "智联系统通用设置中心"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            if (viewModel.settingsScreenSubTab == 0) {
+                                viewModel.showSettingsScreen = false
+                            } else {
+                                viewModel.settingsScreenSubTab = 0
+                            }
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                modifier = Modifier.drawBehind {
+                    drawLine(color = BorderSlate, start = Offset(0f, size.height), end = Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                }
+            )
+        },
+        containerColor = CanvasBg
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            when (viewModel.settingsScreenSubTab) {
+                0 -> { // Settings index list
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, BorderSlate),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column {
+                                    ProfileMenuRow("🎨 个性化大宗承运主题色彩", Icons.Default.Palette)  { viewModel.settingsScreenSubTab = 1 }
+                                    Divider(color = CanvasBg, thickness = 1.dp)
+                                    ProfileMenuRow("🌐 在途多国语音/语言设置", Icons.Default.Language) { viewModel.settingsScreenSubTab = 2 }
+                                    Divider(color = CanvasBg, thickness = 1.dp)
+                                    ProfileMenuRow("🔐 司机一键秒提付密密码设置", Icons.Default.Lock) { viewModel.settingsScreenSubTab = 5 }
+                                    Divider(color = CanvasBg, thickness = 1.dp)
+                                    ProfileMenuRow("📝 新增智联研发反馈与功能建言", Icons.Default.Feedback) { viewModel.settingsScreenSubTab = 4 }
+                                    Divider(color = CanvasBg, thickness = 1.dp)
+                                    ProfileMenuRow("ℹ️ 关于平台架构与金税备案资质", Icons.Default.Info) { viewModel.settingsScreenSubTab = 3 }
+                                }
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    viewModel.isLoggedIn = false
+                                    viewModel.showSettingsScreen = false
+                                    viewModel.profileSubTab = 0
+                                    android.widget.Toast.makeText(context, "✅ 安全注销司机端账户，位置授信保障安全同步注销", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("🚪 安全退出当前司机端账号", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                1 -> { // Theme switching
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Text("点击选取承运工作台主体色调", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
+                        }
+                        val paletteNames = listOf("科技海蓝 (默认蓝)", "中国红运 (陕钢红)", "丝路陇原 (生态绿)", "陕北煤炭 (能源黄)", "靛紫星空 (高品智)")
+                        items(paletteNames.size) { index ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                                    .clickable {
+                                        viewModel.selectedThemeColor = index
+                                        android.widget.Toast.makeText(context, "✅ 主题色调同步更新！", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, if (viewModel.selectedThemeColor == index) BrandNavy else BorderSlate),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    val localColor = when (index) {
+                                        1 -> Color(0xFFEF4444)
+                                        2 -> Color(0xFF10B981)
+                                        3 -> Color(0xFFF97316)
+                                        4 -> Color(0xFF6366F1)
+                                        else -> Color(0xFF2563EB)
+                                    }
+                                    Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(localColor))
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(paletteNames[index], fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextPrimary)
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    if (viewModel.selectedThemeColor == index) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = BrandNavy)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                2 -> { // Language selector
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Text("语言设置", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
+                        }
+                        val languages = listOf("简体中文", "English", "跟随系统")
+                        items(languages.size) { index ->
+                            val lang = languages[index]
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                                    .clickable {
+                                        viewModel.selectedLanguage = lang
+                                        android.widget.Toast.makeText(context, "已切换为: $lang", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, if (viewModel.selectedLanguage == lang) BrandNavy else BorderSlate),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(lang, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextPrimary)
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    if (viewModel.selectedLanguage == lang) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = BrandNavy)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                3 -> { // About us
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)).background(BrandNavy),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.LocalShipping, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text("大宗智联司机端 V2.0.0", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
+                                    Text("大宗物流网络货运智联承运网络", fontSize = 11.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, BorderSlate)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("• 平台名称: 大宗商品智联集成网络货运卡车端", fontSize = 12.sp, color = TextPrimary)
+                                    Text("• 监管备案: 国家交通运输部网络货运信息交互系统", fontSize = 12.sp, color = TextPrimary)
+                                    Text("• 金税支持: 国家税务总局三级金税多级快捷代开代缴开具系统", fontSize = 12.sp, color = TextPrimary)
+                                    Text("• 安全技术: 北斗卫星车载定位轨迹与三方磅单数字确权交互", fontSize = 12.sp, color = TextPrimary)
+                                    Text("• 技术权属: 陕煤陕钢网络货运承运理货合规科技服务中心", fontSize = 12.sp, color = TextPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+                4 -> { // Feedback Form
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Text("请选择反馈或问题类型", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("产品建议", "功能异常", "安全防伪").forEach { type ->
+                                    FilterChip(
+                                        selected = viewModel.feedbackType == type,
+                                        onClick = { viewModel.feedbackType = type },
+                                        label = { Text(type, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("问题/建议详细描述 (不超过100字)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
+                            OutlinedTextField(
+                                value = viewModel.feedbackText,
+                                onValueChange = { viewModel.feedbackText = it },
+                                placeholder = { Text("请详细描述您的大宗货运操作建言、或者是治超地磅、加油、银行卡支付问题...", fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth().height(120.dp).padding(vertical = 6.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedBorderColor = BrandNavy,
+                                    unfocusedBorderColor = BorderSlate,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White
+                                )
+                            )
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    viewModel.submitDriverFeedback {
+                                        android.widget.Toast.makeText(context, "✅ 问题及建言已提交平台后台！", android.widget.Toast.LENGTH_SHORT).show()
+                                        viewModel.settingsScreenSubTab = 0
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("确认安全提交智联服务大厅", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                5 -> { // Payment Password
+                    var pwdVal by remember { mutableStateOf("") }
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        item {
+                            Text("设定智联大宗直提卡付密密码（6位数字）", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
+                            OutlinedTextField(
+                                value = pwdVal,
+                                onValueChange = { pwdVal = it },
+                                placeholder = { Text("输入 6 位数字支付密码...", fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedBorderColor = BrandNavy,
+                                    unfocusedBorderColor = BorderSlate,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White
+                                )
+                            )
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Button(
+                                onClick = {
+                                    if (pwdVal.length != 6) {
+                                        android.widget.Toast.makeText(context, "密码格式不符合，请输入完整6位数字！", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "✅ 极速支付密码绑定核对通过，当前设备信用已强化！", android.widget.Toast.LENGTH_SHORT).show()
+                                        viewModel.settingsScreenSubTab = 0
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandNavy),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("保存并提交指静脉防伪密码", color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

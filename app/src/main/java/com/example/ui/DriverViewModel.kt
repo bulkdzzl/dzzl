@@ -32,6 +32,59 @@ import java.util.concurrent.TimeUnit
 
 data class ChatMsg(val isUser: Boolean, val text: String, val timestamp: Long = System.currentTimeMillis())
 
+data class RefuelingStation(
+    val id: Int,
+    val name: String,
+    val address: String,
+    val distance: String,
+    val gasPrice92: Double,
+    val marketPrice92: Double,
+    val gasPrice95: Double,
+    val marketPrice95: Double,
+    val dieselPrice0: Double,
+    val marketPrice0: Double,
+    val isGas: Boolean = false
+)
+
+data class RefuelingOrder(
+    val id: String,
+    val stationName: String,
+    val address: String,
+    val fuelType: String,
+    val gunNo: String,
+    val vehiclePlate: String,
+    val amount: Double,
+    val pricePerLitre: Double,
+    val litres: Double,
+    val date: String,
+    val status: String
+)
+
+data class BankCard(
+    val id: Int,
+    val bankName: String,
+    val cardType: String,
+    val holderName: String,
+    val cardNumber: String,
+    val isDefault: Boolean
+)
+
+data class SystemNotification(
+    val id: Int,
+    val title: String,
+    val category: String, // "系统通知", "运单通知"
+    val content: String,
+    val date: String
+)
+
+data class DriverReview(
+    val id: Int,
+    val reviewerName: String,
+    val rating: Int,
+    val tags: List<String>,
+    val date: String
+)
+
 class DriverViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
@@ -68,6 +121,222 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     var selectedCargoId by mutableStateOf<Int?>(null) // If set, opens cargo details
     var isLoggedIn by mutableStateOf(false)
     var profileSubTab by mutableStateOf(0) // 0: Main Me list, 1: Personal Profile screen, 2: Vehicle Profile screen
+
+    // --- Refueling Management Feature States ---
+    var showRefuelingScreen by mutableStateOf(false)
+    var refuelingScreenTab by mutableStateOf(0) // 0: Stations, 1: Orders, 2: Oil Card
+    var refuelingStations by mutableStateOf(listOf(
+        RefuelingStation(1, "中石化西安东三环站", "西安市雁塔区东三环与浐灞大道交叉口", "5.2km", 6.98, 8.12, 7.48, 8.62, 6.58, 7.80),
+        RefuelingStation(2, "中石油榆林南站", "榆林市榆阳区环城南路18号", "12.5km", 7.02, 8.15, 7.52, 8.65, 6.62, 7.85),
+        RefuelingStation(3, "延长石油延长路加油站", "延安市宝塔区延长路88号", "18.1km", 6.88, 8.08, 7.38, 8.58, 6.48, 7.75),
+        RefuelingStation(4, "秦能西咸LNG加气站", "咸阳市秦都区世纪大道中段", "8.0km", 5.20, 6.50, 0.0, 0.0, 0.0, 0.0, isGas = true),
+        RefuelingStation(5, "中石化神木滨河路站", "榆林市神木市滨河路120号", "25.0km", 6.95, 8.10, 7.45, 8.60, 6.55, 7.78)
+    ))
+    var refuelingOrders by mutableStateOf(listOf(
+        RefuelingOrder("REF2026100501", "中石化西安东三环站", "西安市雁塔区东三环与浐灞大道交叉口", "0# 柴油", "2号", "陕K·8W912", 500.0, 6.58, 75.98, "2026-05-28 15:32", "已完成"),
+        RefuelingOrder("REF2026100102", "中石油榆林南站", "榆林市榆阳区环城南路18号", "92# 汽油", "1号", "陕K·8W912", 200.0, 7.02, 28.49, "2026-05-25 09:12", "已完成")
+    ))
+    var oilCardBalance by mutableStateOf(2000.00)
+    var selectedStationIdForRefuel by mutableStateOf<Int?>(null)
+    var refuelSelectedFuel by mutableStateOf("0#")
+    var refuelSelectedGun by mutableStateOf("2号")
+    var refuelAmount by mutableStateOf("500")
+
+    // --- Refueling Actions ---
+    fun selectStationForRefuel(stationId: Int) {
+        val station = refuelingStations.find { it.id == stationId } ?: return
+        selectedStationIdForRefuel = stationId
+        refuelSelectedFuel = if (station.isGas) "LNG" else "0#"
+        refuelSelectedGun = "2号"
+        refuelAmount = "500"
+    }
+
+    fun executeRefuel(onSuccess: () -> Unit) {
+        val station = refuelingStations.find { it.id == selectedStationIdForRefuel } ?: return
+        val amountDouble = refuelAmount.toDoubleOrNull() ?: 0.0
+        if (amountDouble <= 0.0) return
+
+        viewModelScope.launch {
+            isProcessing = true
+            processMessage = "正在连接【${station.name}】物联网接口核销扣款..."
+            delay(1500)
+
+            if (oilCardBalance < amountDouble) {
+                processMessage = "扣款失败：油卡余额不足！当前余额为¥$oilCardBalance。"
+                delay(1200)
+                isProcessing = false
+            } else {
+                oilCardBalance -= amountDouble
+                val fuelTypeLabel = when (refuelSelectedFuel) {
+                    "92#" -> "92# 汽油"
+                    "95#" -> "95# 汽油"
+                    "0#" -> "0# 柴油"
+                    else -> "LNG 天然气"
+                }
+                val price = when (refuelSelectedFuel) {
+                    "92#" -> station.gasPrice92
+                    "95#" -> station.gasPrice95
+                    "0#" -> station.dieselPrice0
+                    else -> station.gasPrice92 // gas price
+                }
+                val litres = if (price > 0.0) amountDouble / price else amountDouble / 6.0
+                val dateStr = "2026-05-29 08:08"
+                val newOrder = RefuelingOrder(
+                    id = "REF20261029" + (refuelingOrders.size + 1),
+                    stationName = station.name,
+                    address = station.address,
+                    fuelType = fuelTypeLabel,
+                    gunNo = refuelSelectedGun,
+                    vehiclePlate = profile.value?.plateNumber ?: "陕K·8W912",
+                    amount = amountDouble,
+                    pricePerLitre = price,
+                    litres = litres,
+                    date = dateStr,
+                    status = "已完成"
+                )
+                refuelingOrders = listOf(newOrder) + refuelingOrders
+                processMessage = "一键智联智慧加油扣款成功！请配合1号大宗车辆靠箱加油。"
+                delay(1500)
+                isProcessing = false
+                selectedStationIdForRefuel = null
+                refuelingScreenTab = 1 // Switch to Tab Orders
+                onSuccess()
+            }
+        }
+    }
+
+    fun chargeOilCard(amount: Double) {
+        viewModelScope.launch {
+            isProcessing = true
+            val balanceVal = profile.value?.balance ?: 0.0
+            if (balanceVal < amount) {
+                processMessage = "充值失败：卡车钱包余额不足以转换充值！"
+                delay(1200)
+                isProcessing = false
+                return@launch
+            }
+            processMessage = "智联一键核算：正在从卡车运费提现账户中分配 ¥$amount 到油卡..."
+            delay(1500)
+            
+            // Deduct profile balance & add transactions
+            val current = profile.value ?: DriverProfile()
+            val updated = current.copy(balance = balanceVal - amount)
+            repository.updateProfile(updated)
+
+            val newTx = com.example.data.WalletTransaction(
+                title = "运费转冲油卡",
+                amount = -amount,
+                status = "SUCCESS",
+                paymentMethod = "余额转换"
+            )
+            repository.insertTransaction(newTx)
+
+            oilCardBalance += amount
+            processMessage = "充值充油卡成功！油卡余额：¥$oilCardBalance。"
+            delay(1200)
+            isProcessing = false
+        }
+    }
+
+    // --- Bank Card Feature States ---
+    var showBankCardsScreen by mutableStateOf(false)
+    var showAddBankCardDialog by mutableStateOf(false)
+    var bankCards by mutableStateOf(listOf(
+        BankCard(1, "中国建设银行", "储蓄卡", "王建国", "6217 **** **** 3829", isDefault = true),
+        BankCard(2, "陕西省信用联社", "储蓄卡", "王建国", "6217 **** **** 3849", isDefault = false)
+    ))
+
+    fun addBankCard(name: String, cardNo: String, bank: String) {
+        if (name.isBlank() || cardNo.isBlank() || bank.isBlank()) return
+        val last4 = if (cardNo.length >= 4) cardNo.takeLast(4) else "8888"
+        val formattedNo = "**** **** **** $last4"
+        val newCard = BankCard(
+            id = bankCards.size + 1,
+            bankName = bank,
+            cardType = "储蓄卡",
+            holderName = name,
+            cardNumber = formattedNo,
+            isDefault = bankCards.isEmpty()
+        )
+        bankCards = bankCards + newCard
+        showAddBankCardDialog = false
+    }
+
+    fun removeBankCard(id: Int) {
+        bankCards = bankCards.filterNot { it.id == id }
+    }
+
+    // --- Message Center States ---
+    var showMessageCenterScreen by mutableStateOf(false)
+    var notifications by mutableStateOf(listOf(
+        SystemNotification(1, "系统通知: 陕煤新货源上线", "系统通知", "今日新增神木至渭南原煤货源1200吨，调派车辆充足，运价稳定¥135/吨，欢迎师傅们积极申领抢单！", "2026-05-29 08:00"),
+        SystemNotification(2, "运单通知: 电子运单已结算", "运单通知", "您的运单【DAZONG20261002】(原煤运输任务) 已通过金税多级审核，运费 ¥4,200.00 已划拨至您的司机钱包中，支持秒提到账。", "2026-05-29 07:12"),
+        SystemNotification(3, "系统通知: 关于近期强降雨天气安全行车提示", "系统通知", "陕北路段未来3天将有暴雨。由于重载半挂自卸起承运阻力大，建议卡友控制车速，保持安全车距，注意山体滑坡！", "2026-05-28 14:00"),
+        SystemNotification(4, "系统通知: 全国成品油下调预告", "系统通知", "预计本周五24时国内0#柴油下调约0.15元/升，各位师傅可酌情调整加油计划。", "2026-05-27 10:30")
+    ))
+
+    // --- Reviews State ---
+    var showReviewsScreen by mutableStateOf(false)
+    var reviewsRating by mutableStateOf(4.2)
+    var reviewsCount by mutableStateOf(28)
+    var driverReviews by mutableStateOf(listOf(
+        DriverReview(1, "王经理 (陕煤运输处)", 5, listOf("货量准时", "安全送达", "车辆整洁"), "2026-05-28"),
+        DriverReview(2, "华能电厂物资部", 4, listOf("货量准时", "配送专业"), "2026-05-25"),
+        DriverReview(3, "神东煤炭收发主管", 5, listOf("配送效率极高", "态度诚恳"), "2026-05-20"),
+        DriverReview(4, "渭南大康发货班长", 3, listOf("卸货配合好"), "2026-05-18"),
+        DriverReview(5, "宝钢物流调度员", 4, listOf("车况及车棚严密"), "2026-05-15")
+    ))
+
+    fun addSampleReview(ratingVal: Int, tagSelected: String) {
+        val newReview = DriverReview(
+            id = driverReviews.size + 1,
+            reviewerName = "装煤场调度负责人",
+            rating = ratingVal,
+            tags = listOf(tagSelected, "大宗智联认证"),
+            date = "2026-05-29"
+        )
+        driverReviews = listOf(newReview) + driverReviews
+        reviewsCount++
+        reviewsRating = String.format(java.util.Locale.US, "%.1f", (driverReviews.sumOf { it.rating }.toDouble() / driverReviews.size)).toDouble()
+    }
+
+    // --- Settings Center States ---
+    var showSettingsScreen by mutableStateOf(false)
+    var settingsScreenSubTab by mutableStateOf(0) // 0: Main setting pane, 1: Theme selection, 2: Language, 3: About us, 4: Feedback feed, 5: Payment password
+    var selectedThemeColor by mutableStateOf(0) // 0: Blue (Default), 1: Red, 2: Green, 3: Orange, 4: Purple/Slate
+    var selectedLanguage by mutableStateOf("简体中文")
+    var feedbackType by mutableStateOf("产品建议")
+    var feedbackText by mutableStateOf("")
+
+    fun submitDriverFeedback(onComplete: () -> Unit) {
+        if (feedbackText.isBlank()) return
+        viewModelScope.launch {
+            isProcessing = true
+            processMessage = "反馈提交中，正在上传至智联服务日志..."
+            delay(1200)
+            feedbackText = ""
+            processMessage = "您的反馈提交成功！客服人员将尽快审阅并持续优化系统。"
+            delay(1200)
+            isProcessing = false
+            onComplete()
+        }
+    }
+
+    // --- Splash and Version Update Dialog States ---
+    var showSplashScreen by mutableStateOf(true)
+    var showUpdateDialog by mutableStateOf(false)
+
+    fun initializeAppRef() {
+        viewModelScope.launch {
+            delay(1800) // Simulate splash checks
+            showSplashScreen = false
+            showUpdateDialog = true // Trigger discovered new version dialog
+        }
+    }
+
+    var showReviewsDialog by mutableStateOf(false)
+    var reviewDialogRating by mutableStateOf(5)
+    var reviewDialogTag by mutableStateOf("安全抵达")
 
     // --- UI Dialog / Temp States ---
     var showWithdrawDialog by mutableStateOf(false)
