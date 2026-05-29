@@ -1,0 +1,6 @@
+{
+  "name": "大宗智联-司机端",
+  "description": "大宗智联-司机端是一款面向大宗商品货运司机量身打造的网络货运移动应用。提供海量真实货源智能匹配、极速一键抢单/接单、规范化的装卸货流程（确权电子磅单管理）、透明快捷的运费钱包收支明细及提现服务。全力协助大宗货运司机实现高效、绿色、合规运输。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
